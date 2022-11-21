@@ -12,8 +12,8 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 // The file token.json stores the user's access and refresh tokens, and is
 // created automatically when the authorization flow completes for the first
 // time.
-const TOKEN_PATH = path.join(process.cwd(), '/tmp/token.json');
-const CREDENTIALS_PATH = path.join(process.cwd(), '/tmp/credentials.json');
+const TOKEN_PATH = '/tmp/token.json'
+const CREDENTIALS_PATH = '/tmp/credentials.json'
 
 /**
  * Serializes credentials to a file comptible with GoogleAUth.fromJSON.
@@ -31,7 +31,8 @@ async function saveCredentials() {
       "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
       "client_secret": process.env.GOOGLE_CLIENT_SECRET,
       "redirect_uris": [
-        "http://localhost"
+        "http://localhost",
+        "https://life4ddr-api.vercel.app/"
       ]
     }
   });

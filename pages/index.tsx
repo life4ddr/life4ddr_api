@@ -21,7 +21,7 @@ export default function Home({ host }: HomeProps) {
     getPosts();
   }, [getPosts]);
 
-  return <><ul>{posts.map(post => <li key={post.id}>{post.title.rendered}</li>)}</ul><a href={`https://life4ddr.com/oauth/authorize?response_type=token&client_id=${process.env.NEXT_PUBLIC_LIFE4_OAUTH_CLIENT_ID}&redirect_uri=${host}`}>Login</a></>;
+  return <><ul>{posts.map(post => <li key={post.id}>{post.title.rendered}</li>)}</ul><a href={`https://life4ddr.com/oauth/authorize?response_type=token&client_id=${process.env.NEXT_PUBLIC_LIFE4_OAUTH_CLIENT_ID}&redirect_uri=${host?.startsWith("localhost") ? "http://" : "https://"}${host}`}>Login</a></>;
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ query, req, res }) => {
