@@ -12,22 +12,7 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 // created automatically when the authorization flow completes for the first
 // time.
 const TOKEN_PATH = path.join(process.cwd(), '/tmp/token.json');
-const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
-
-/**
- * Reads previously authorized credentials from the save file.
- *
- * @return {Promise<OAuth2Client|null>}
- */
-async function loadSavedCredentialsIfExist() {
-  try {
-    const content = await fs.readFile(TOKEN_PATH);
-    const credentials = JSON.parse(content);
-    return google.auth.fromJSON(credentials);
-  } catch (err) {
-    return null;
-  }
-}
+const CREDENTIALS_PATH = path.join(process.cwd(), '/tmp/credentials.json');
 
 /**
  * Serializes credentials to a file comptible with GoogleAUth.fromJSON.
@@ -35,7 +20,45 @@ async function loadSavedCredentialsIfExist() {
  * @param {OAuth2Client} client
  * @return {Promise<void>}
  */
-async function saveCredentials(client) {
+async function saveCredentials() {
+  const payload = JSON.stringify({
+    "installed": {
+      "client_id": process.env.GOOGLE_CLIENT_ID,
+      "project_id": process.env.GOOGLE_PROJECT_ID,
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_secret": process.env.GOOGLE_CLIENT_SECRET,
+      "redirect_uris": [
+        "http://localhost"
+      ]
+    }
+  });
+  await fs.writeFile(CREDENTIALS_PATH, payload);
+}
+
+/**
+ * Reads previously authorized token from the save file.
+ *
+ * @return {Promise<OAuth2Client|null>}
+ */
+async function loadSavedTokenIfExist() {
+  try {
+    const content = await fs.readFile(TOKEN_PATH);
+    const token = JSON.parse(content);
+    return google.auth.fromJSON(google);
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Serializes token to a file comptible with GoogleAUth.fromJSON.
+ *
+ * @param {OAuth2Client} client
+ * @return {Promise<void>}
+ */
+async function saveToken(client) {
   const content = await fs.readFile(CREDENTIALS_PATH);
   const keys = JSON.parse(content);
   const key = keys.installed || keys.web;
@@ -53,7 +76,12 @@ async function saveCredentials(client) {
  *
  */
 async function authorize() {
-  let client = await loadSavedCredentialsIfExist();
+  try {
+    await fs.readFile(CREDENTIALS_PATH)
+  } catch (err) {
+    await saveCredentials();
+  }
+  let client = await loadSavedTokenIfExist();
   if (client) {
     return client;
   }
@@ -62,7 +90,7 @@ async function authorize() {
     keyfilePath: CREDENTIALS_PATH,
   });
   if (client.credentials) {
-    await saveCredentials(client);
+    await saveToken(client);
   }
   return client;
 }
