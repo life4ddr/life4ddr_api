@@ -9,7 +9,11 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<Data>
 ) {
-  const response = await fetch("https://life4ddr.com/api/wp/v2/posts")
+  const { code } = req.cookies;
+
+  console.log(code);
+
+  const response = await fetch(`https://life4ddr.com/oauth/me?access_token=${code}`)
 
   res.status(200).json(await response.json())
 }
