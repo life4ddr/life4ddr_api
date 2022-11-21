@@ -14,7 +14,7 @@ export default function Home() {
     getPosts();
   }, [getPosts]);
 
-  return <><ul>{posts.map(post => <li>{post.title.rendered}</li>)}</ul><a href="https://life4ddr.com/oauth/authorize?response_type=token&client_id=I4miBiR6IGChRNlYKmH01ERQNARgz27k4JGtPmxp&redirect_uri=http://localhost:3001">Login</a></>;
+  return <><ul>{posts.map(post => <li key={post.id}>{post.title.rendered}</li>)}</ul><a href="https://life4ddr.com/oauth/authorize?response_type=token&client_id=I4miBiR6IGChRNlYKmH01ERQNARgz27k4JGtPmxp&redirect_uri=http://localhost:3001">Login</a></>;
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ query, res }) => {
