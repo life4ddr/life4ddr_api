@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { OAuth2Client } from 'google-auth-library';
+import {authenticate} from '@google-cloud/local-auth';
+import { google } from 'googleapis'
 
 const fs = require('fs').promises;
 const path = require('path');
 const process = require('process');
-const {authenticate} = require('@google-cloud/local-auth');
-const {google} = require('googleapis');
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
@@ -46,7 +47,7 @@ async function loadSavedTokenIfExist() {
   try {
     const content = await fs.readFile(TOKEN_PATH);
     const token = JSON.parse(content);
-    return google.auth.fromJSON(google);
+    return google.auth.fromJSON(token) as OAuth2Client;
   } catch (err) {
     return null;
   }
@@ -58,7 +59,7 @@ async function loadSavedTokenIfExist() {
  * @param {OAuth2Client} client
  * @return {Promise<void>}
  */
-async function saveToken(client) {
+async function saveToken(client: OAuth2Client) {
   const content = await fs.readFile(CREDENTIALS_PATH);
   const keys = JSON.parse(content);
   const key = keys.installed || keys.web;
@@ -96,11 +97,9 @@ async function authorize() {
 }
 
 /**
- * Prints the names and majors of students in a sample spreadsheet:
- * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
-async function listMajors(auth) {
+async function listRanks(auth: OAuth2Client) {
   const sheets = google.sheets({version: 'v4', auth});
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: '1b4fX7Xbn8Bz0qswbaJwOV26lR4ZUVbdZpm2n8BBTag8',
@@ -111,9 +110,9 @@ async function listMajors(auth) {
     console.log('No data found.');
     return;
   }
-  const ranks = [];
-  const rankNames = {};
-  const rankColumns = {};
+  const ranks: string[] = [];
+  const rankNames: {[index: string]: number} = {};
+  const rankColumns: {[index: string]: number} = {};
 
   rows[0].forEach((cell, i) => {
     const name = cell.split(" ")[0].toLocaleLowerCase();
@@ -147,7 +146,7 @@ export default async function handler(
   const auth = await authorize();
   
   try {
-    const json = await listMajors(auth)
+    const json = await listRanks(auth)
     res.status(200).json(json)
   } catch (err) {
     res.status(500).send(err);
