@@ -4,6 +4,7 @@ import { google } from 'googleapis'
 interface Requirement {
   goal_ids?: number[];
   mandatory_goal_ids?: number[];
+  substitutions?: number[];
   play_style: "single";
   rank: string;
   requirements?: number;
@@ -48,30 +49,45 @@ interface SongsDiffNumsGoal extends GoalBase {
   diff_nums: number[]
 }
 
+interface SongsLampGoal extends GoalBase {
+  t: "songs";
+  d: number;
+  clear_type?: string;
+}
+
 interface TrialGoal extends GoalBase {
   t: "trial",
   rank: string;
   count: number;
 }
 
-type Goal = CaloriesGoal | SongsDiffClassGoal | SongsDiffNumsGoal | TrialGoal;
+type Goal = CaloriesGoal | SongsDiffClassGoal | SongsDiffNumsGoal | SongsLampGoal | TrialGoal;
+
+const clearTypes: {[index: string]: string} = {
+  "Red": "life4",
+  "Blue": "good",
+  "Green": "great",
+  "Gold": "perfect"
+}
 
 async function listRanks() {
-  let CALORIES_ID = 1000;
-  let SONGS_DIFF_CLASS_ID = 2000;
-  let SONGS_DIFF_NUMS_ID = 3000;
-  let TRIAL_ID = 4000;
-  let MFC_POINTS_ID = 5000;
-  let MULTIPLE_ID = 5500;
-  let SONGS_3_9_ID = 6000;
-  let SONGS_10_11_ID = 6500;
-  let SONGS_12_13_ID = 7000;
-  let SONGS_14_ID = 7500;
-  let SONGS_15_ID = 8000;
-  let SONGS_16_ID = 8500;
-  let SONGS_17_ID = 9000;
-  let SONGS_18_ID = 9500;
-  let SONGS_19_ID = 10000;
+  const ids: {[index: string]: number} = {
+    calories: 1000,
+    songsDiffClass: 2000,
+    songsDiffNums: 3000,
+    trial: 4000,
+    mfcPoints: 5000,
+    multiple: 5500,
+    songs3_9: 6000,
+    songs10_11: 6500,
+    songs12_13: 7000,
+    songs14: 7500,
+    songs15: 8000,
+    songs16: 8500,
+    songs17: 9000,
+    songs18: 9500,
+    songs19: 10000,
+  }
 
   const sheets = google.sheets({version: 'v4', auth: process.env.GOOGLE_API_KEY});
   const res = await sheets.spreadsheets.values.get({
@@ -83,6 +99,10 @@ async function listRanks() {
     console.log('No data found.');
     return;
   }
+
+  const mandatoryCells: {[index: number]: number} = {};
+  const substitutionsCells: {[index: number]: number} = {};
+
   const requirements: Requirement[] = [];
   const rankNames: {[index: string]: number} = {};
   const requirementIndices: {[index: number]: number} = {};
@@ -94,8 +114,8 @@ async function listRanks() {
     const count = Number(cellArr[5]);
     let goal = goals.find((goal) => goal.t === "trial" && goal.rank === rank && goal.count === count)
     if (!goal) {
-      goal = { id: TRIAL_ID, t: "trial", rank, count };
-      TRIAL_ID += 1;
+      goal = { id: ids.trial, t: "trial", rank, count };
+      ids.trial += 1;
       goals.push(goal);
     }
     if (optional) {
@@ -105,6 +125,36 @@ async function listRanks() {
     }
   }
 
+  const parseLamp = (requirement: Requirement, cell: string, difficulty: string, substitution: boolean) => {
+    const color = cell.split(" ")[0];
+    const clearType = clearTypes[color];
+    const d = parseInt(difficulty);
+    let goal = goals.find((goal) => "d" in goal && goal.d === d && goal.t === "songs" && goal.clear_type === clearType);
+    if (!goal) {
+      goal = { id: ids[`songs${d}`], d, t: "songs" }
+      if (clearType) {
+        goal.clear_type = clearType
+      }
+      ids[`songs${d}`] += 1;
+      goals.push(goal);
+    }
+    if (substitution) {
+      requirement.substitutions = requirement.substitutions ? [...requirement.substitutions, goal.id] : [goal.id];
+    } else {
+      requirement.mandatory_goal_ids = requirement.mandatory_goal_ids ? [...requirement.mandatory_goal_ids, goal.id] : [goal.id];
+    }
+  }
+
+  rows.forEach((row, i) => {
+    row.forEach((cell, j) => {
+      if (cell === "Mandatory") {
+        mandatoryCells[j] = i
+      }
+      if (cell === "Substitutions") {
+        substitutionsCells[j] = i;
+      }
+    });
+  })
   rows[0].forEach((cell, i) => {
     const name = cell.split(" ")[0].toLocaleLowerCase();
     if (name) {
@@ -117,18 +167,23 @@ async function listRanks() {
     }
   })
   rows[1].forEach((cell, i) => {
-    if (cell.toLocaleLowerCase().startsWith("complete")) {
+    if (cell.match(/^Complete [0-9]/)) {
       const requirementNumber = Number(cell.split(" ")[1]);
       const requirement = requirements[requirementIndices[i]];
       requirement.requirements = requirementNumber;
     }
   })
-  rows[2].forEach((cell, i) => {
-    if (cell.toLocaleLowerCase().startsWith("trials")) {
-      const requirement = requirements[requirementIndices[i]];
-      parseTrials(requirement, rows[3][i], true);
-    }
-  })
+  rows.forEach((row, i) => {
+    row.forEach((cell, j) => {
+      const requirement = requirements[requirementIndices[j]];
+      if (cell === "Trials") {
+        parseTrials(requirement, rows[i+1][j], !!mandatoryCells[j] && mandatoryCells[j] > i);
+      }
+      if (cell.match(/Lamp$/)) {
+        parseLamp(requirement, cell, rows[i-1][j], !!substitutionsCells[j] && substitutionsCells[j] < i);
+      }
+    });
+  });
   return {
     goals,
     game_versions: {
