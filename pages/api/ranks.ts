@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { google } from "googleapis";
-import { shallowEqualArrays } from "shallow-equal";
+import shallowequal from "shallowequal";
 
 interface Requirement {
   goal_ids?: number[];
@@ -363,8 +363,7 @@ async function listRanks() {
     const diff_nums = Array(count);
     diff_nums.fill(difficulty);
     let goal = goals.find(
-      (goal) =>
-        "diff_nums" in goal && shallowEqualArrays(goal.diff_nums && diff_nums)
+      (goal) => "diff_nums" in goal && shallowequal(goal.diff_nums && diff_nums)
     );
     if (!goal) {
       goal = {
