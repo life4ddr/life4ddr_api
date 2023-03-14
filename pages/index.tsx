@@ -1,5 +1,5 @@
 import { GetServerSideProps } from "next";
-import { ReactElement, useCallback, useEffect, useState } from "react";
+import { ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import { ClearType, Goal, Requirement } from "../interfaces";
 
 const printGoal = (goal?: Goal) => {
@@ -184,52 +184,56 @@ const Requirements = ({
 
 type HomeProps = { host: string | null };
 
-export default function Home({ host }: HomeProps) {
-  const [ranks, setRanks] = useState<{
-    game_versions: {
-      A20: {
-        rank_requirements: Requirement[];
-      };
-      A3: {
-        rank_requirements: Requirement[];
-      };
+interface Ranks {
+  game_versions: {
+    A20: {
+      rank_requirements: Requirement[];
     };
-    goals: Goal[];
-  }>({
-    game_versions: {
-      A20: {
-        rank_requirements: [],
-      },
-      A3: {
-        rank_requirements: [],
-      },
-    },
-    goals: [],
-  });
+    A3: {
+      rank_requirements: Requirement[];
+    };
+  };
+  goals: Goal[];
+}
+
+export default function Home({ host }: HomeProps) {
+  const requested = useRef(false);
+
+  const [ranks, setRanks] = useState<Ranks | undefined>();
 
   const getRanks = useCallback(async () => {
+    requested.current = true;
+
     const response = await fetch("/api/ranks");
 
     setRanks(await response.json());
   }, []);
 
   useEffect(() => {
-    getRanks();
+    if (!requested.current) {
+      getRanks();
+    }
   }, [getRanks]);
 
   return (
     <>
-      <h2>A3</h2>
-      <Requirements
-        goals={ranks.goals}
-        requirements={ranks.game_versions.A3.rank_requirements}
-      />
-      <h2>A20</h2>
-      <Requirements
-        goals={ranks.goals}
-        requirements={ranks.game_versions.A20.rank_requirements}
-      />
-      <a
+      {ranks ? (
+        <>
+          <h2>A3</h2>
+          <Requirements
+            goals={ranks.goals}
+            requirements={ranks.game_versions.A3.rank_requirements}
+          />
+          <h2>A20</h2>
+          <Requirements
+            goals={ranks.goals}
+            requirements={ranks.game_versions.A20.rank_requirements}
+          />
+        </>
+      ) : (
+        "Loading ranks, please wait..."
+      )}
+      {/* <a
         href={`https://life4ddr.com/oauth/authorize?response_type=token&client_id=${
           process.env.NEXT_PUBLIC_LIFE4_OAUTH_CLIENT_ID
         }&redirect_uri=${
@@ -237,7 +241,7 @@ export default function Home({ host }: HomeProps) {
         }${host}`}
       >
         Login
-      </a>
+      </a> */}
     </>
   );
 }
