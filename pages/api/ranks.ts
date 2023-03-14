@@ -1,95 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { google } from "googleapis";
 import shallowequal from "shallowequal";
-
-interface Requirement {
-  goal_ids?: number[];
-  mandatory_goal_ids?: number[];
-  substitutions?: number[];
-  play_style: "single";
-  rank: string;
-  requirements?: number;
-}
-
-interface GoalBase {
-  id: number;
-}
-
-interface CaloriesGoal extends GoalBase {
-  t: "calories";
-  count: number;
-}
-
-interface SongsDiffClassGoalBase extends GoalBase {
-  t: "songs";
-  diff_class: string;
-}
-
-interface SongsDiffClassGoalFolderCount extends SongsDiffClassGoalBase {
-  folder_count: number;
-}
-
-interface SongsDiffClassGoalFolder extends SongsDiffClassGoalBase {
-  folder: string;
-}
-
-interface SongsDiffClassGoalSongCount extends SongsDiffClassGoalBase {
-  song_count: number;
-  clear_type: string;
-}
-
-interface SongsDiffClassGoalSongs extends SongsDiffClassGoalBase {
-  songs: string[];
-  score: number;
-}
-
-type SongsDiffClassGoal =
-  | SongsDiffClassGoalFolderCount
-  | SongsDiffClassGoalFolder
-  | SongsDiffClassGoalSongCount
-  | SongsDiffClassGoalSongs;
-
-interface SongsDiffNumsGoal extends GoalBase {
-  t: "set";
-  diff_nums: number[];
-}
-
-interface SongsLampGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  clear_type?: string;
-}
-
-interface SongsScoreGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  score: number;
-  exceptions?: number;
-  song_exceptions?: string[];
-}
-
-interface SongsCountGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  score?: number;
-  song_count: number;
-  higher_diff?: true;
-}
-
-interface TrialGoal extends GoalBase {
-  t: "trial";
-  rank: string;
-  count: number;
-}
-
-type Goal =
-  | CaloriesGoal
-  | SongsDiffClassGoal
-  | SongsDiffNumsGoal
-  | SongsLampGoal
-  | SongsScoreGoal
-  | SongsCountGoal
-  | TrialGoal;
+import { ClearType, Goal, Requirement, SongsCountGoal } from "../../interfaces";
 
 type Parser = (
   rowIndex: number,
@@ -97,11 +9,18 @@ type Parser = (
   match: RegExpMatchArray
 ) => void;
 
-const clearTypes: { [index: string]: string } = {
+const clearLamps: { [index: string]: ClearType } = {
   Red: "life4",
   Blue: "good",
   Green: "great",
   Gold: "perfect",
+};
+
+const clearTypes: { [index: string]: ClearType } = {
+  "LIFE4 Clear": "life4",
+  "Full Combo": "good",
+  "Great Full Combo": "great",
+  PFC: "perfect",
 };
 
 async function listRanks() {
@@ -128,7 +47,7 @@ async function listRanks() {
     auth: process.env.GOOGLE_API_KEY,
   });
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "1b4fX7Xbn8Bz0qswbaJwOV26lR4ZUVbdZpm2n8BBTag8",
+    spreadsheetId: "1eqF6oXaCW4RwvZIKZ_qJs92w-HVGuIC9xSnHOs-wgMk",
     range: "A1:BM",
   });
   const rows = res.data.values;
@@ -148,7 +67,7 @@ async function listRanks() {
   const getRequirement = (columnIndex: number) =>
     requirements[requirementIndices[columnIndex]];
   const isMandatory = (rowIndex: number, columnIndex: number) =>
-    !!mandatoryCells[columnIndex] && mandatoryCells[columnIndex] < rowIndex;
+    !mandatoryCells[columnIndex] || mandatoryCells[columnIndex] < rowIndex;
   const isSubstitution = (rowIndex: number, columnIndex: number) =>
     !!substitutionsCells[columnIndex] &&
     substitutionsCells[columnIndex] < rowIndex;
@@ -166,20 +85,15 @@ async function listRanks() {
     return `songs${d}`;
   };
 
-  const setGoalId = (
-    columnIndex: number,
-    goal: Goal,
-    mandatory = false,
-    substitution = false
-  ) => {
+  const setGoalId = (rowIndex: number, columnIndex: number, goal: Goal) => {
     const requirement = getRequirement(columnIndex);
-    if (mandatory) {
-      requirement.mandatory_goal_ids = requirement.mandatory_goal_ids
-        ? [...requirement.mandatory_goal_ids, goal.id]
-        : [goal.id];
-    } else if (substitution) {
+    if (isSubstitution(rowIndex, columnIndex)) {
       requirement.substitutions = requirement.substitutions
         ? [...requirement.substitutions, goal.id]
+        : [goal.id];
+    } else if (isMandatory(rowIndex, columnIndex)) {
+      requirement.mandatory_goal_ids = requirement.mandatory_goal_ids
+        ? [...requirement.mandatory_goal_ids, goal.id]
         : [goal.id];
     } else {
       requirement.goal_ids = requirement.goal_ids
@@ -189,11 +103,10 @@ async function listRanks() {
   };
 
   const parseClear: Parser = (rowIndex, columnIndex, match) => {
-    const substitution = isSubstitution(rowIndex, columnIndex);
-    const mandatory = isMandatory(rowIndex, columnIndex);
-    const song_count = match[1] === "a" ? 1 : Number(match[1]);
-    const d = Number(match[2]);
-    const higher_diff = !!match[3] || undefined;
+    const clearType = clearTypes[match[1]];
+    const song_count = match[2] === "a" ? 1 : Number(match[2]);
+    const d = Number(match[3]);
+    const higher_diff = !!match[4] || undefined;
     let goal = goals.find(
       (goal) =>
         "d" in goal &&
@@ -202,7 +115,8 @@ async function listRanks() {
         goal.t === "songs" &&
         goal.d === d &&
         goal.song_count === song_count &&
-        goal.higher_diff === higher_diff
+        goal.higher_diff === higher_diff &&
+        (clearType ? goal.clear_type === clearType : !("clear_type" in goal))
     ) as SongsCountGoal | undefined;
     if (!goal) {
       const idsIndex = getIdsIndex(d);
@@ -215,14 +129,49 @@ async function listRanks() {
       if (higher_diff) {
         goal.higher_diff = higher_diff;
       }
+      if (clearType) {
+        goal.clear_type = clearType;
+      }
       ids[idsIndex] += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, mandatory, substitution);
+    setGoalId(rowIndex, columnIndex, goal);
+  };
+
+  const parsePFCs: Parser = (rowIndex, columnIndex, match) => {
+    const song_count = Number(match[1]);
+    const d = Number(match[2]);
+    const higher_diff = !!match[3] || undefined;
+    let goal = goals.find(
+      (goal) =>
+        "d" in goal &&
+        "song_count" in goal &&
+        !("score" in goal) &&
+        goal.t === "songs" &&
+        goal.d === d &&
+        goal.song_count === song_count &&
+        goal.higher_diff === higher_diff &&
+        goal.clear_type === "perfect"
+    );
+    if (!goal) {
+      const idsIndex = getIdsIndex(d);
+      goal = {
+        id: ids[idsIndex],
+        t: "songs",
+        d,
+        song_count,
+        clear_type: "perfect",
+      };
+      if (higher_diff) {
+        goal.higher_diff = higher_diff;
+      }
+      ids[idsIndex] += 1;
+      goals.push(goal);
+    }
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   const parseTrials: Parser = (rowIndex, columnIndex, match) => {
-    const mandatory = isMandatory(rowIndex, columnIndex);
     const rank = match[1].toLocaleLowerCase();
     const count = Number(match[2]);
     let goal = goals.find(
@@ -233,20 +182,20 @@ async function listRanks() {
       ids.trial += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, mandatory);
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   const parseLamp: Parser = (rowIndex, columnIndex, match) => {
     const difficulty = rows[rowIndex - 1][columnIndex];
-    const substitution = isSubstitution(rowIndex, columnIndex);
     const color = match[1];
-    const clearType = clearTypes[color];
+    const clearType = clearLamps[color];
     const d = parseInt(difficulty);
     let goal = goals.find(
       (goal) =>
         "d" in goal &&
         !("score" in goal) &&
         !("song_count" in goal) &&
+        !("average_score" in goal) &&
         goal.d === d &&
         goal.t === "songs" &&
         goal.clear_type === clearType
@@ -260,11 +209,10 @@ async function listRanks() {
       ids[idsIndex] += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, false, substitution);
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   const parseAll: Parser = (rowIndex, columnIndex, match) => {
-    const substitution = isSubstitution(rowIndex, columnIndex);
     const d = Number(match[1]);
     const score = Number(match[2]) * 1000;
     let exceptions: number | undefined = undefined;
@@ -280,6 +228,7 @@ async function listRanks() {
         "d" in goal &&
         "score" in goal &&
         !("song_count" in goal) &&
+        !("songs" in goal) &&
         goal.d === d &&
         goal.t === "songs" &&
         goal.score === score &&
@@ -303,7 +252,7 @@ async function listRanks() {
       ids[idsIndex] += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, false, substitution);
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   const parseCalories: Parser = (rowIndex, columnIndex, match) => {
@@ -320,14 +269,14 @@ async function listRanks() {
       ids.calories += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal);
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
-  const parseSingleScore: Parser = (rowIndex, columnIndex, match) => {
-    const substitution = isSubstitution(rowIndex, columnIndex);
-    const score = Number(match[1]) * 1000;
-    const d = Number(match[2]);
-    const higher_diff = !!match[3] || undefined;
+  const parseScore: Parser = (rowIndex, columnIndex, match) => {
+    const score = (match[1] === "AAA" ? 990 : Number(match[2])) * 1000;
+    const song_count = Number(match[3]) || 1;
+    const d = Number(match[4]);
+    const higher_diff = !!match[5] || undefined;
     let goal = goals.find(
       (goal) =>
         "d" in goal &&
@@ -335,7 +284,7 @@ async function listRanks() {
         "song_count" in goal &&
         goal.d === d &&
         goal.score === score &&
-        goal.song_count === 1 &&
+        goal.song_count === song_count &&
         goal.higher_diff === higher_diff
     );
     if (!goal) {
@@ -345,7 +294,7 @@ async function listRanks() {
         t: "songs",
         d,
         score,
-        song_count: 1,
+        song_count,
       };
       if (higher_diff) {
         goal.higher_diff = true;
@@ -353,17 +302,16 @@ async function listRanks() {
       ids[idsIndex] += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, false, substitution);
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   const parseSet: Parser = (rowIndex, columnIndex, match) => {
-    const mandatory = isMandatory(rowIndex, columnIndex);
     const count = Number(match[1]);
     const difficulty = Number(match[2]);
     const diff_nums = Array(count);
     diff_nums.fill(difficulty);
     let goal = goals.find(
-      (goal) => "diff_nums" in goal && shallowequal(goal.diff_nums && diff_nums)
+      (goal) => "diff_nums" in goal && shallowequal(goal.diff_nums, diff_nums)
     );
     if (!goal) {
       goal = {
@@ -374,7 +322,90 @@ async function listRanks() {
       ids.songsDiffNums += 1;
       goals.push(goal);
     }
-    setGoalId(columnIndex, goal, mandatory);
+    setGoalId(rowIndex, columnIndex, goal);
+  };
+
+  const getDifficulty = (rowIndex: number, columnIndex: number) => {
+    let d = 0;
+    let rowIndexStart = rowIndex - 1;
+    let diffMatch;
+    while (!d && rowIndexStart > -1) {
+      if (
+        rows[rowIndexStart][columnIndex] &&
+        (diffMatch = rows[rowIndexStart][columnIndex].match(/^ *([0-9]+)s *$/))
+      ) {
+        d = Number(diffMatch[1]);
+      }
+      rowIndexStart -= 1;
+    }
+    return d;
+  };
+
+  const parseAverage: Parser = (rowIndex, columnIndex, match) => {
+    const average_score = Number(match[1].replace(",", ""));
+    const d = getDifficulty(rowIndex, columnIndex);
+    let goal = goals.find(
+      (goal) =>
+        "average_score" in goal &&
+        goal.d === d &&
+        goal.average_score === average_score
+    );
+    if (!goal) {
+      const idsIndex = getIdsIndex(d);
+      goal = {
+        average_score,
+        id: ids[idsIndex],
+        d,
+        t: "songs",
+      };
+      ids[idsIndex] += 1;
+      goals.push(goal);
+    }
+    setGoalId(rowIndex, columnIndex, goal);
+  };
+
+  const parseSongScore: Parser = (rowIndex, columnIndex, match) => {
+    const score = Number(match[1]) * 1000;
+    const d = getDifficulty(rowIndex, columnIndex);
+    const diff_class = "C";
+    const songs = match[2].split(/, and |, | and /);
+    let goal = goals.find(
+      (goal) =>
+        "songs" in goal &&
+        goal.d === d &&
+        goal.diff_class === diff_class &&
+        goal.score === score &&
+        goal.songs.length === songs.length &&
+        goal.songs.every((song) => songs.includes(song))
+    );
+    if (!goal) {
+      goal = {
+        id: ids.songsDiffClass,
+        d,
+        diff_class,
+        score,
+        songs,
+        t: "songs",
+      };
+      ids.songsDiffClass += 1;
+      goals.push(goal);
+    }
+    setGoalId(rowIndex, columnIndex, goal);
+  };
+
+  const parseMFCPoints = (rowIndex: number, columnIndex: number) => {
+    const points = Number(rows[rowIndex + 1][columnIndex]);
+    let goal = goals.find((goal) => "points" in goal && goal.points === points);
+    if (!goal) {
+      goal = {
+        id: ids.mfcPoints,
+        t: "mfc_points",
+        points,
+      };
+      ids.mfcPoints += 1;
+      goals.push(goal);
+    }
+    setGoalId(rowIndex, columnIndex, goal);
   };
 
   rows.forEach((row, i) => {
@@ -408,30 +439,59 @@ async function listRanks() {
   });
   rows.forEach((row, i) => {
     row.forEach((cell: string, j) => {
-      let match;
       if (!cell) {
         return;
       }
-      if ((match = cell.match(/^Clear ([a0-9]+)n? ([0-9]+)s?(\+)?$/))) {
-        parseClear(i, j, match);
-      } else if (
-        (match = cell.match(/^Earn (.*)+ or above on ([0-9]+) Trial/))
+      const trimmedCell = cell.trim();
+      if (trimmedCell === "MFC Points") {
+        return parseMFCPoints(i, j);
+      }
+      let match;
+      if (
+        (match = trimmedCell.match(
+          /^(Clear|LIFE4 Clear|Full Combo|Great Full Combo|PFC) ([a0-9]+)n? ([0-9]{1,2})s?(\+)?$/
+        ))
       ) {
-        parseTrials(i, j, match);
-      } else if ((match = cell.match(/(.+) Lamp$/))) {
-        parseLamp(i, j, match);
-      } else if (
-        (match = cell.match(
+        return parseClear(i, j, match);
+      }
+      if ((match = trimmedCell.match(/^([0-9]+) ([0-9]{1,2})(\+)? PFCs/))) {
+        return parsePFCs(i, j, match);
+      }
+      if (
+        (match = trimmedCell.match(/^Earn (.*)+ or above on ([0-9]+) Trial/))
+      ) {
+        return parseTrials(i, j, match);
+      }
+      if ((match = trimmedCell.match(/(.+) Lamp$/))) {
+        return parseLamp(i, j, match);
+      }
+      if (
+        (match = trimmedCell.match(
           /^All ([0-9]{1,2})s over ([0-9]{3})k()( \(([0-9]+)E\))?( \(ex. (.*)\))?/
         ))
       ) {
-        parseAll(i, j, match);
-      } else if ((match = cell.match(/^Burn ([0-9]+)/))) {
-        parseCalories(i, j, match);
-      } else if ((match = cell.match(/^([0-9]{3})k\+ a ([0-9]{1,2})(\+?)/))) {
-        parseSingleScore(i, j, match);
-      } else if ((match = cell.match(/^Clear ([0-9]+) ([0-9]+)s in a row/))) {
-        parseSet(i, j, match);
+        return parseAll(i, j, match);
+      }
+      if ((match = trimmedCell.match(/^Burn ([0-9]+)/))) {
+        return parseCalories(i, j, match);
+      }
+      if (
+        (match = trimmedCell.match(
+          /^(([0-9]{3})k\+|AAA) ([a0-9]+)n? ([0-9]{1,2})(\+?)/
+        ))
+      ) {
+        return parseScore(i, j, match);
+      }
+      if (
+        (match = trimmedCell.match(/^Clear ([0-9]+) ([0-9]{1,2})s in a row/))
+      ) {
+        return parseSet(i, j, match);
+      }
+      if ((match = trimmedCell.match(/^([0-9,]+) Average/))) {
+        return parseAverage(i, j, match);
+      }
+      if ((match = trimmedCell.match(/^([0-9]{3})k\+ on (.*)$/))) {
+        return parseSongScore(i, j, match);
       }
     });
   });
