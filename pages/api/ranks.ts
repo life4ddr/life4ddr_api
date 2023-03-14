@@ -23,46 +23,51 @@ const clearTypes: { [index: string]: ClearType } = {
   PFC: "perfect",
 };
 
-async function listRanks() {
-  const ids: { [index: string]: number } = {
-    calories: 1000,
-    songsDiffClass: 2000,
-    songsDiffNums: 3000,
-    trial: 4000,
-    mfcPoints: 5000,
-    multiple: 5500,
-    songs1_9: 6000,
-    songs10_11: 6500,
-    songs12_13: 7000,
-    songs14: 7500,
-    songs15: 8000,
-    songs16: 8500,
-    songs17: 9000,
-    songs18: 9500,
-    songs19: 10000,
-  };
+const sheets = google.sheets({
+  version: "v4",
+  auth: process.env.GOOGLE_API_KEY,
+});
 
-  const sheets = google.sheets({
-    version: "v4",
-    auth: process.env.GOOGLE_API_KEY,
-  });
+const ids: { [index: string]: number } = {
+  calories: 1000,
+  songsDiffClass: 2000,
+  songsDiffNums: 3000,
+  trial: 4000,
+  mfcPoints: 5000,
+  multiple: 5500,
+  songs1_9: 6000,
+  songs10_11: 6500,
+  songs12_13: 7000,
+  songs14: 7500,
+  songs15: 8000,
+  songs16: 8500,
+  songs17: 9000,
+  songs18: 9500,
+  songs19: 10000,
+};
+
+async function getRows(range: string) {
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "1eqF6oXaCW4RwvZIKZ_qJs92w-HVGuIC9xSnHOs-wgMk",
-    range: "A1:BM",
+    spreadsheetId: "1b4fX7Xbn8Bz0qswbaJwOV26lR4ZUVbdZpm2n8BBTag8",
+    range: range,
   });
   const rows = res.data.values;
   if (!rows || rows.length === 0) {
     console.log("No data found.");
     return;
   }
+  return rows;
+}
 
+const goals: Goal[] = [];
+
+async function listRequirements(rows: string[][]) {
   const mandatoryCells: { [index: number]: number } = {};
   const substitutionsCells: { [index: number]: number } = {};
 
   const requirements: Requirement[] = [];
   const rankNames: { [index: string]: number } = {};
   const requirementIndices: { [index: number]: number } = {};
-  const goals: Goal[] = [];
 
   const getRequirement = (columnIndex: number) =>
     requirements[requirementIndices[columnIndex]];
@@ -71,6 +76,13 @@ async function listRanks() {
   const isSubstitution = (rowIndex: number, columnIndex: number) =>
     !!substitutionsCells[columnIndex] &&
     substitutionsCells[columnIndex] < rowIndex;
+
+  const getSong = (song: string) =>
+    song === "Endymion"
+      ? "ENDYMION"
+      : song === "Lachryma"
+      ? "Lachryma《Re:Queen’M》"
+      : song;
 
   const getIdsIndex = (d: number) => {
     if (d < 10) {
@@ -221,7 +233,7 @@ async function listRanks() {
     }
     let song_exceptions: string[] | undefined = undefined;
     if (match[7]) {
-      song_exceptions = match[7].split(" & ");
+      song_exceptions = match[7].split(" & ").map(getSong);
     }
     let goal = goals.find(
       (goal) =>
@@ -368,7 +380,7 @@ async function listRanks() {
     const score = Number(match[1]) * 1000;
     const d = getDifficulty(rowIndex, columnIndex);
     const diff_class = "C";
-    const songs = match[2].split(/, and |, | and /);
+    const songs = match[2].split(/, and |, | and /).map(getSong);
     let goal = goals.find(
       (goal) =>
         "songs" in goal &&
@@ -495,20 +507,29 @@ async function listRanks() {
       }
     });
   });
-  return {
-    goals,
-    game_versions: {
-      A3: {
-        rank_requirements: requirements,
-      },
-    },
-  };
+  return requirements;
 }
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const json = await listRanks();
-  res.status(200).json(json);
+  const a3Rows = await getRows("'5.0 (A3 ver.)'!A1:BM");
+  const a20Rows = await getRows("'5.0 (A20+ ver.)'!A1:BM");
+  if (a3Rows && a20Rows) {
+    const json = {
+      goals,
+      game_versions: {
+        A20: {
+          rank_requirements: await listRequirements(a20Rows),
+        },
+        A3: {
+          rank_requirements: await listRequirements(a3Rows),
+        },
+      },
+    };
+    res.status(200).json(json);
+  } else {
+    res.status(500).send("Internal Server Error");
+  }
 }

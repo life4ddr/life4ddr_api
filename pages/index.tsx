@@ -84,35 +84,13 @@ const printGoal = (goal?: Goal) => {
   return JSON.stringify(goal);
 };
 
-type HomeProps = { host: string | null };
-
-export default function Home({ host }: HomeProps) {
-  const [ranks, setRanks] = useState<{
-    game_versions: {
-      A3: {
-        rank_requirements: Requirement[];
-      };
-    };
-    goals: Goal[];
-  }>({
-    game_versions: {
-      A3: {
-        rank_requirements: [],
-      },
-    },
-    goals: [],
-  });
-
-  const getPosts = useCallback(async () => {
-    const response = await fetch("/api/ranks");
-
-    setRanks(await response.json());
-  }, []);
-
-  useEffect(() => {
-    getPosts();
-  }, [getPosts]);
-
+const Requirements = ({
+  goals,
+  requirements,
+}: {
+  requirements: Requirement[];
+  goals: Goal[];
+}) => {
   const rows: ReactElement[][] = [];
 
   let moreData = true;
@@ -136,28 +114,26 @@ export default function Home({ host }: HomeProps) {
           ]));
 
   while (moreData) {
-    moreData = ranks.game_versions.A3.rank_requirements.some(getGoalId);
+    moreData = requirements.some(getGoalId);
     if (moreData) {
       rows.push(
-        ranks.game_versions.A3.rank_requirements.map(
-          (requirement, requirementIndex) => {
-            const goalId = getGoalId(requirement);
-            if (goalId) {
-              if (goalId === "Mandatory") {
-                return <th key={requirementIndex}>Mandatory</th>;
-              }
-              if (goalId === "Substitutions") {
-                return <th key={requirementIndex}>Substitutions</th>;
-              }
-              return (
-                <td key={requirementIndex}>
-                  {printGoal(ranks.goals.find((g) => g.id === goalId))}
-                </td>
-              );
+        requirements.map((requirement, requirementIndex) => {
+          const goalId = getGoalId(requirement);
+          if (goalId) {
+            if (goalId === "Mandatory") {
+              return <th key={requirementIndex}>Mandatory</th>;
             }
-            return <td key={requirementIndex} />;
+            if (goalId === "Substitutions") {
+              return <th key={requirementIndex}>Substitutions</th>;
+            }
+            return (
+              <td key={requirementIndex}>
+                {printGoal(goals.find((g) => g.id === goalId))}
+              </td>
+            );
           }
-        )
+          return <td key={requirementIndex} />;
+        })
       );
       index += 1;
     }
@@ -172,40 +148,87 @@ export default function Home({ host }: HomeProps) {
   };
 
   return (
-    <>
-      <table style={{ whiteSpace: "nowrap" }}>
-        <thead>
-          <tr>
-            {ranks.game_versions.A3.rank_requirements.map((requirement) => (
-              <th key={requirement.rank}>
-                {requirement.rank.charAt(0).toUpperCase() +
-                  requirement.rank.slice(1, -1) +
-                  " " +
-                  romanNumerals[requirement.rank.slice(-1)]}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {ranks.game_versions.A3.rank_requirements.map(
-              (requirement, index) => (
-                <th key={index}>
-                  {requirement.requirements
-                    ? `Complete ${requirement.requirements} / ${
-                        requirement.goal_ids?.length ||
-                        requirement.mandatory_goal_ids?.length
-                      }`
-                    : ""}
-                </th>
-              )
-            )}
-          </tr>
-          {rows.map((row, index) => (
-            <tr key={index}>{row}</tr>
+    <table style={{ whiteSpace: "nowrap" }}>
+      <thead>
+        <tr>
+          {requirements.map((requirement) => (
+            <th key={requirement.rank}>
+              {requirement.rank.charAt(0).toUpperCase() +
+                requirement.rank.slice(1, -1) +
+                " " +
+                romanNumerals[requirement.rank.slice(-1)]}
+            </th>
           ))}
-        </tbody>
-      </table>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          {requirements.map((requirement, index) => (
+            <th key={index}>
+              {requirement.requirements
+                ? `Complete ${requirement.requirements} / ${
+                    requirement.goal_ids?.length ||
+                    requirement.mandatory_goal_ids?.length
+                  }`
+                : ""}
+            </th>
+          ))}
+        </tr>
+        {rows.map((row, index) => (
+          <tr key={index}>{row}</tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+type HomeProps = { host: string | null };
+
+export default function Home({ host }: HomeProps) {
+  const [ranks, setRanks] = useState<{
+    game_versions: {
+      A20: {
+        rank_requirements: Requirement[];
+      };
+      A3: {
+        rank_requirements: Requirement[];
+      };
+    };
+    goals: Goal[];
+  }>({
+    game_versions: {
+      A20: {
+        rank_requirements: [],
+      },
+      A3: {
+        rank_requirements: [],
+      },
+    },
+    goals: [],
+  });
+
+  const getRanks = useCallback(async () => {
+    const response = await fetch("/api/ranks");
+
+    setRanks(await response.json());
+  }, []);
+
+  useEffect(() => {
+    getRanks();
+  }, [getRanks]);
+
+  return (
+    <>
+      <h2>A3</h2>
+      <Requirements
+        goals={ranks.goals}
+        requirements={ranks.game_versions.A3.rank_requirements}
+      />
+      <h2>A20</h2>
+      <Requirements
+        goals={ranks.goals}
+        requirements={ranks.game_versions.A20.rank_requirements}
+      />
       <a
         href={`https://life4ddr.com/oauth/authorize?response_type=token&client_id=${
           process.env.NEXT_PUBLIC_LIFE4_OAUTH_CLIENT_ID
