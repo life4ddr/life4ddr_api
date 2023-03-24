@@ -245,7 +245,7 @@ async function listRequirements(rows: string[][]) {
         goal.t === "songs" &&
         goal.score === score &&
         goal.exceptions === exceptions &&
-        goal.song_exceptions === song_exceptions
+        shallowequal(goal.song_exceptions, song_exceptions)
     );
     if (!goal) {
       const idsIndex = getIdsIndex(d);
