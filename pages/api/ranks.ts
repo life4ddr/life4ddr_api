@@ -547,7 +547,8 @@ async function listRequirements(rows: string[][]) {
       }
       if (
         (match = trimmedCell.match(
-          /^Clear ([0-9]+) ([0-9]+)s over ([0-9]{3})k( \(([0-9]+)E(, ([0-9]+)k\)))?/
+          // temp: optional "60" in the sheet from copy-paste error
+          /^Clear(?: 60)? ([0-9]+) ([0-9]+)s over ([0-9]{3})k( \(([0-9]+)E(, ([0-9]+)k\)))?/
         ))
       ) {
         return parseScores(i, j, match);
