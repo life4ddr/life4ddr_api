@@ -2,6 +2,13 @@ import { GetServerSideProps } from "next";
 import { ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import { ClearType, Goal, Requirement } from "../interfaces";
 
+const formatScore = (score: number) => {
+  if (score % 1000 === 0) {
+    return String(score).substring(0, 3) + "k";
+  }
+  return score.toLocaleString();
+};
+
 const printGoal = (goal?: Goal) => {
   const an: { [index: number]: "an" } = {
     8: "an",
@@ -14,6 +21,8 @@ const printGoal = (goal?: Goal) => {
     good: "Full Combo",
     great: "Great Full Combo",
     perfect: "PFC",
+    sdp: "SDP",
+    marvelous: "MFC",
   };
 
   const clearLamps: { [index in ClearType]: string } = {
@@ -21,6 +30,8 @@ const printGoal = (goal?: Goal) => {
     good: "Blue",
     great: "Green",
     perfect: "Gold",
+    sdp: "Gold",
+    marvelous: "White",
   };
 
   if (!goal) {
@@ -34,8 +45,8 @@ const printGoal = (goal?: Goal) => {
       goal.rank.charAt(0).toUpperCase() + goal.rank.slice(1)
     } or above on ${goal.count} Trial${goal.count === 1 ? "" : "s"}`;
   }
-  if (goal.t === "mfc_points") {
-    return `MFC Points: ${goal.points}`;
+  if (goal.t === "ma_points") {
+    return `MA Points: ${goal.points}`;
   }
   if (
     goal.t === "set" &&
@@ -49,11 +60,22 @@ const printGoal = (goal?: Goal) => {
         return `${goal.d}s: ${goal.average_score.toLocaleString()} Average`;
       }
       if ("song_count" in goal) {
+        const { score } = goal;
+        if (goal.exceptions && score) {
+          let ret = `Clear ${goal.song_count} ${goal.d}s over ${formatScore(
+            score
+          )} (${goal.exceptions}E`;
+          if (goal.exception_score) {
+            ret += `, ${formatScore(goal.exception_score)}`;
+          }
+          ret += ")";
+          return ret;
+        }
         return `${
-          goal.score
-            ? goal.score === 990000
+          score
+            ? score === 990000
               ? "AAA"
-              : `${String(goal.score).substring(0, 3)}k+`
+              : `${formatScore(score)}+`
             : goal.clear_type
             ? clearTypes[goal.clear_type]
             : "Clear"
@@ -62,17 +84,23 @@ const printGoal = (goal?: Goal) => {
         }${goal.song_count === 1 ? "" : "s"}${goal.higher_diff ? "+" : ""}`;
       }
       if ("songs" in goal) {
-        return `${String(goal.score).substring(0, 3)}k+ on ${goal.songs.join(
-          " and "
-        )}`;
+        return `${formatScore(goal.score)}+ on ${goal.songs.join(" and ")}`;
       }
       if ("score" in goal) {
-        let ret = `All ${goal.d}s over ${String(goal.score).substring(0, 3)}k`;
+        let ret = `All ${goal.d}s over ${formatScore(goal.score)}`;
         if (goal.exceptions) {
-          ret += ` (${goal.exceptions}E)`;
+          ret += ` (${goal.exceptions}E`;
+          if (goal.exception_score) {
+            ret += `, ${formatScore(goal.exception_score)}`;
+          }
+          ret += ")";
         }
         if (goal.song_exceptions) {
-          ret += ` (ex. ${goal.song_exceptions.join(" & ")})`;
+          ret += ` (ex. ${goal.song_exceptions.join(" & ")}`;
+          if (goal.exception_score) {
+            ret += `, ${formatScore(goal.exception_score)}`;
+          }
+          ret += ")";
         }
         return ret;
       }

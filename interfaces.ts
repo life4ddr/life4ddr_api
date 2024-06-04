@@ -7,7 +7,13 @@ export interface Requirement {
   requirements?: number;
 }
 
-export type ClearType = "life4" | "good" | "great" | "perfect";
+export type ClearType =
+  | "life4"
+  | "good"
+  | "great"
+  | "perfect"
+  | "sdp"
+  | "marvelous";
 
 interface GoalBase {
   id: number;
@@ -65,6 +71,7 @@ interface SongsScoreGoal extends GoalBase {
   score: number;
   exceptions?: number;
   song_exceptions?: string[];
+  exception_score?: number;
 }
 
 export interface SongsCountGoal extends GoalBase {
@@ -74,6 +81,8 @@ export interface SongsCountGoal extends GoalBase {
   song_count: number;
   higher_diff?: true;
   clear_type?: ClearType;
+  exceptions?: number;
+  exception_score?: number;
 }
 
 interface SongsAverageGoal extends GoalBase {
@@ -88,8 +97,8 @@ interface TrialGoal extends GoalBase {
   count: number;
 }
 
-interface MFCPointsGoal extends GoalBase {
-  t: "mfc_points";
+interface MAPointsGoal extends GoalBase {
+  t: "ma_points";
   points: number;
 }
 
@@ -102,4 +111,4 @@ export type Goal =
   | SongsCountGoal
   | SongsAverageGoal
   | TrialGoal
-  | MFCPointsGoal;
+  | MAPointsGoal;

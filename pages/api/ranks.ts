@@ -21,6 +21,8 @@ const clearTypes: { [index: string]: ClearType } = {
   "Full Combo": "good",
   "Great Full Combo": "great",
   PFC: "perfect",
+  SDP: "sdp",
+  MFC: "marvelous",
 };
 
 const sheets = google.sheets({
@@ -33,7 +35,7 @@ const ids: { [index: string]: number } = {
   songsDiffClass: 2000,
   songsDiffNums: 3000,
   trial: 4000,
-  mfcPoints: 5000,
+  maPoints: 5000,
   multiple: 5500,
   songs1_9: 6000,
   songs10_11: 6500,
@@ -48,7 +50,7 @@ const ids: { [index: string]: number } = {
 
 async function getRows(range: string) {
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "1b4fX7Xbn8Bz0qswbaJwOV26lR4ZUVbdZpm2n8BBTag8",
+    spreadsheetId: "177SxduFGkE2EaCu0p1RxEUUhL4exo92KOl7N-U5ZzGU",
     range: range,
   });
   const rows = res.data.values;
@@ -226,14 +228,23 @@ async function listRequirements(rows: string[][]) {
 
   const parseAll: Parser = (rowIndex, columnIndex, match) => {
     const d = Number(match[1]);
-    const score = Number(match[2]) * 1000;
+    const score = match[2].includes(",")
+      ? Number(match[4].replace(",", ""))
+      : Number(match[3]) * 1000;
     let exceptions: number | undefined = undefined;
+    let exception_score: number | undefined = undefined;
     if (match[5]) {
-      exceptions = Number(match[5]);
+      exceptions = Number(match[6]);
+      if (match[7]) {
+        exception_score = Number(match[8]) * 1000;
+      }
     }
     let song_exceptions: string[] | undefined = undefined;
-    if (match[7]) {
-      song_exceptions = match[7].split(" & ").map(getSong);
+    if (match[9]) {
+      song_exceptions = match[10].split(" & ").map(getSong);
+      if (match[11]) {
+        exception_score = Number(match[12]) * 1000;
+      }
     }
     let goal = goals.find(
       (goal) =>
@@ -245,6 +256,7 @@ async function listRequirements(rows: string[][]) {
         goal.t === "songs" &&
         goal.score === score &&
         goal.exceptions === exceptions &&
+        goal.exception_score === exception_score &&
         shallowequal(goal.song_exceptions, song_exceptions)
     );
     if (!goal) {
@@ -257,6 +269,9 @@ async function listRequirements(rows: string[][]) {
       };
       if (exceptions) {
         goal.exceptions = exceptions;
+      }
+      if (exception_score) {
+        goal.exception_score = exception_score;
       }
       if (song_exceptions) {
         goal.song_exceptions = song_exceptions;
@@ -311,6 +326,40 @@ async function listRequirements(rows: string[][]) {
       if (higher_diff) {
         goal.higher_diff = true;
       }
+      ids[idsIndex] += 1;
+      goals.push(goal);
+    }
+    setGoalId(rowIndex, columnIndex, goal);
+  };
+
+  const parseScores: Parser = (rowIndex, columnIndex, match) => {
+    const score = Number(match[3]) * 1000;
+    const song_count = Number(match[1]);
+    const d = Number(match[2]);
+    const exceptions = match[4] ? Number(match[5]) : undefined;
+    const exception_score = match[6] ? Number(match[7]) * 1000 : undefined;
+    let goal = goals.find(
+      (goal) =>
+        "d" in goal &&
+        "score" in goal &&
+        "song_count" in goal &&
+        goal.d === d &&
+        goal.score === score &&
+        goal.song_count === song_count &&
+        goal.exceptions === exceptions &&
+        goal.exception_score === exception_score
+    );
+    if (!goal) {
+      const idsIndex = getIdsIndex(d);
+      goal = {
+        id: ids[idsIndex],
+        t: "songs",
+        d,
+        score,
+        song_count,
+        exceptions,
+        exception_score,
+      };
       ids[idsIndex] += 1;
       goals.push(goal);
     }
@@ -405,16 +454,18 @@ async function listRequirements(rows: string[][]) {
     setGoalId(rowIndex, columnIndex, goal);
   };
 
-  const parseMFCPoints = (rowIndex: number, columnIndex: number) => {
-    const points = Number(rows[rowIndex + 1][columnIndex]);
+  const parseMAPoints = (rowIndex: number, columnIndex: number) => {
+    const cell = rows[rowIndex + 1][columnIndex];
+    if (cell == null) return;
+    const points = Number(cell);
     let goal = goals.find((goal) => "points" in goal && goal.points === points);
     if (!goal) {
       goal = {
-        id: ids.mfcPoints,
-        t: "mfc_points",
+        id: ids.maPoints,
+        t: "ma_points",
         points,
       };
-      ids.mfcPoints += 1;
+      ids.maPoints += 1;
       goals.push(goal);
     }
     setGoalId(rowIndex, columnIndex, goal);
@@ -455,13 +506,13 @@ async function listRequirements(rows: string[][]) {
         return;
       }
       const trimmedCell = cell.trim();
-      if (trimmedCell === "MFC Points") {
-        return parseMFCPoints(i, j);
+      if (trimmedCell === "MA Points") {
+        return parseMAPoints(i, j);
       }
       let match;
       if (
         (match = trimmedCell.match(
-          /^(Clear|LIFE4 Clear|Full Combo|Great Full Combo|PFC) ([a0-9]+)n? ([0-9]{1,2})s?(\+)?$/
+          /^(Clear|LIFE4 Clear|Full Combo|Great Full Combo|PFC|SDP|MFC) ([a0-9]+)n? ([0-9]{1,2})s?(\+)?$/
         ))
       ) {
         return parseClear(i, j, match);
@@ -479,7 +530,7 @@ async function listRequirements(rows: string[][]) {
       }
       if (
         (match = trimmedCell.match(
-          /^All ([0-9]{1,2})s over ([0-9]{3})k()( \(([0-9]+)E\))?( \(ex. (.*)\))?/
+          /^All ([0-9]{1,2})s over (([0-9]{3})k|([0-9]{3},[0-9]{3}))( \(([0-9]+)E(, ([0-9]+)k\)))?( \(ex. ([^,]+)(, ([0-9]+)k)?\))?/
         ))
       ) {
         return parseAll(i, j, match);
@@ -493,6 +544,13 @@ async function listRequirements(rows: string[][]) {
         ))
       ) {
         return parseScore(i, j, match);
+      }
+      if (
+        (match = trimmedCell.match(
+          /^Clear ([0-9]+) ([0-9]+)s over ([0-9]{3})k( \(([0-9]+)E(, ([0-9]+)k\)))?/
+        ))
+      ) {
+        return parseScores(i, j, match);
       }
       if (
         (match = trimmedCell.match(/^Clear ([0-9]+) ([0-9]{1,2})s in a row/))
@@ -514,8 +572,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const a3Rows = await getRows("'5.0 (A3 ver.)'!A1:BM");
-  const a20Rows = await getRows("'5.0 (A20+ ver.)'!A1:BM");
+  const a3Rows = await getRows("'5.06 band-aid patch (A3 ver.)'!A1:BM");
+  const a20Rows = await getRows("'5.06 band-aid patch (A20+ ver.)'!A1:BM");
   if (a3Rows && a20Rows) {
     const json = {
       goals,
