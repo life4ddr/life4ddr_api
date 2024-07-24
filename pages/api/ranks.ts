@@ -573,8 +573,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const a3Rows = await getRows("'5.06 band-aid patch (A3 ver.)'!A1:BM");
-  const a20Rows = await getRows("'5.06 band-aid patch (A20+ ver.)'!A1:BM");
+  const a3Rows = await getRows("'5.1 patch (A3 ver.)'!A1:BM");
+  const a20Rows = await getRows("'5.1 patch (A20+ ver.)'!A1:BM");
   if (a3Rows && a20Rows) {
     const json = {
       goals,
