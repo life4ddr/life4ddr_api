@@ -25,15 +25,6 @@ const printGoal = (goal?: Goal) => {
     marvelous: "MFC",
   };
 
-  const clearLamps: { [index in ClearType]: string } = {
-    life4: "Red",
-    good: "Blue",
-    great: "Green",
-    perfect: "Gold",
-    sdp: "Gold",
-    marvelous: "White",
-  };
-
   if (!goal) {
     return "";
   }
@@ -56,9 +47,6 @@ const printGoal = (goal?: Goal) => {
   }
   if (goal.t === "songs") {
     if ("d" in goal) {
-      if ("average_score" in goal) {
-        return `${goal.d}s: ${goal.average_score.toLocaleString()} Average`;
-      }
       if ("song_count" in goal) {
         const { score } = goal;
         if (goal.exceptions && score) {
@@ -86,27 +74,33 @@ const printGoal = (goal?: Goal) => {
       if ("songs" in goal) {
         return `${formatScore(goal.score)}+ on ${goal.songs.join(" and ")}`;
       }
-      if ("score" in goal) {
-        let ret = `All ${goal.d}s over ${formatScore(goal.score)}`;
-        if (goal.exceptions) {
-          ret += ` (${goal.exceptions}E`;
-          if (goal.exception_score) {
-            ret += `, ${formatScore(goal.exception_score)}`;
-          }
-          ret += ")";
-        }
-        if (goal.song_exceptions) {
-          ret += ` (ex. ${goal.song_exceptions.join(" & ")}`;
-          if (goal.exception_score) {
-            ret += `, ${formatScore(goal.exception_score)}`;
-          }
-          ret += ")";
-        }
-        return ret;
+      let ret = ``;
+      if (goal.clear_type) {
+        ret = clearTypes[goal.clear_type];
+      } else {
+        ret = "Clear";
       }
-      return `${goal.d} ${
-        goal.clear_type ? clearLamps[goal.clear_type] : "Clear"
-      } Lamp`;
+      ret += ` all ${goal.d}s`;
+      if (goal.score != null) {
+        ret += ` over ${formatScore(goal.score)}`;
+      } else if (goal.average_score != null) {
+        ret += ` with a ${formatScore(goal.average_score)} Folder Average`;
+      }
+      if (goal.exceptions) {
+        ret += ` (${goal.exceptions}E`;
+        if (goal.exception_score) {
+          ret += `, ${formatScore(goal.exception_score)}`;
+        }
+        ret += ")";
+      }
+      if (goal.song_exceptions) {
+        ret += ` (ex. ${goal.song_exceptions.join(" & ")}`;
+        if (goal.exception_score) {
+          ret += `, ${formatScore(goal.exception_score)}`;
+        }
+        ret += ")";
+      }
+      return ret;
     }
   }
   return JSON.stringify(goal);
@@ -217,7 +211,7 @@ interface Ranks {
     A20: {
       rank_requirements: Requirement[];
     };
-    A3: {
+    WORLD: {
       rank_requirements: Requirement[];
     };
   };
@@ -247,10 +241,10 @@ export default function Home({ host }: HomeProps) {
     <>
       {ranks ? (
         <>
-          <h2>A3</h2>
+          <h2>WORLD</h2>
           <Requirements
             goals={ranks.goals}
-            requirements={ranks.game_versions.A3.rank_requirements}
+            requirements={ranks.game_versions.WORLD.rank_requirements}
           />
           <h2>A20</h2>
           <Requirements

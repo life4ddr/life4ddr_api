@@ -59,36 +59,17 @@ interface SongsDiffNumsGoal extends GoalBase {
   diff_nums: number[];
 }
 
-interface SongsLampGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  clear_type?: ClearType;
-}
-
-interface SongsScoreGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  score: number;
-  exceptions?: number;
-  song_exceptions?: string[];
-  exception_score?: number;
-}
-
-export interface SongsCountGoal extends GoalBase {
+export interface SongsGoal extends GoalBase {
   t: "songs";
   d: number;
   score?: number;
-  song_count: number;
+  song_count?: number;
   higher_diff?: true;
   clear_type?: ClearType;
   exceptions?: number;
+  song_exceptions?: string[];
   exception_score?: number;
-}
-
-interface SongsAverageGoal extends GoalBase {
-  t: "songs";
-  d: number;
-  average_score: number;
+  average_score?: number;
 }
 
 interface TrialGoal extends GoalBase {
@@ -104,11 +85,8 @@ interface MAPointsGoal extends GoalBase {
 
 export type Goal =
   | CaloriesGoal
+  | SongsGoal
   | SongsDiffClassGoal
   | SongsDiffNumsGoal
-  | SongsLampGoal
-  | SongsScoreGoal
-  | SongsCountGoal
-  | SongsAverageGoal
   | TrialGoal
   | MAPointsGoal;

@@ -1,13 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { google } from "googleapis";
 import shallowequal from "shallowequal";
-import { ClearType, Goal, Requirement, SongsCountGoal } from "../../interfaces";
+import { ClearType, Goal, Requirement, SongsGoal } from "../../interfaces";
 
 type Parser = (
   rowIndex: number,
   columnIndex: number,
   match: RegExpMatchArray
 ) => void;
+
+const scoreRegex = "(([0-9]{3})k|([0-9]{3},[0-9]{3}))";
+const exceptionRegex = "([0-9]+)E";
+const clearTypeRegex =
+  "(Clear|LIFE4 Clear|Full Combo|Great Full Combo|Perfect Full Combo|PFC|SDP|MFC)";
 
 const clearLamps: { [index: string]: ClearType } = {
   Red: "life4",
@@ -20,6 +25,7 @@ const clearTypes: { [index: string]: ClearType } = {
   "LIFE4 Clear": "life4",
   "Full Combo": "good",
   "Great Full Combo": "great",
+  "Perfect Full Combo": "perfect",
   PFC: "perfect",
   SDP: "sdp",
   MFC: "marvelous",
@@ -50,7 +56,7 @@ const ids: { [index: string]: number } = {
 
 async function getRows(range: string) {
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "177SxduFGkE2EaCu0p1RxEUUhL4exo92KOl7N-U5ZzGU",
+    spreadsheetId: "15lVqlvGrOAQLb-WwqfzOmGc7yAp1TRgL_yjn1xe6kfw",
     range: range,
   });
   const rows = res.data.values;
@@ -62,6 +68,13 @@ async function getRows(range: string) {
 }
 
 const goals: Goal[] = [];
+
+const parseNumber = (match: RegExpMatchArray, index: number) => {
+  if (match[index + 1] != null) {
+    return Number(match[index + 1]) * 1000;
+  }
+  return Number(match[index + 2].replace(",", ""));
+};
 
 async function listRequirements(rows: string[][]) {
   const mandatoryCells: { [index: number]: number } = {};
@@ -116,11 +129,37 @@ async function listRequirements(rows: string[][]) {
     }
   };
 
-  const parseClear: Parser = (rowIndex, columnIndex, match) => {
+  const parseScores: Parser = (rowIndex, columnIndex, match) => {
     const clearType = clearTypes[match[1]];
-    const song_count = match[2] === "a" ? 1 : Number(match[2]);
+    let song_count: number | undefined;
+    if (match[2] === "a" || match[2] === "an") {
+      song_count = 1;
+    } else {
+      const parsedNum = Number(match[2]);
+      if (!Number.isNaN(parsedNum)) {
+        song_count = parsedNum;
+      }
+    }
     const d = Number(match[3]);
     const higher_diff = !!match[4] || undefined;
+    let score: number | undefined;
+    let average_score: number | undefined;
+
+    if (match[5] != null) {
+      score = parseNumber(match, 5);
+    }
+    if (match[8] === "Folder Average") {
+      average_score = score;
+      score = undefined;
+    }
+    let exceptions: number | undefined;
+    let exception_score: number | undefined;
+    if (match[9]) {
+      exceptions = Number(match[10]);
+      if (match[12]) {
+        exception_score = parseNumber(match, 12);
+      }
+    }
     let goal = goals.find(
       (goal) =>
         "d" in goal &&
@@ -130,21 +169,39 @@ async function listRequirements(rows: string[][]) {
         goal.d === d &&
         goal.song_count === song_count &&
         goal.higher_diff === higher_diff &&
+        goal.score === score &&
+        goal.average_score === average_score &&
+        goal.exceptions === exceptions &&
+        goal.exception_score === exception_score &&
         (clearType ? goal.clear_type === clearType : !("clear_type" in goal))
-    ) as SongsCountGoal | undefined;
+    ) as SongsGoal | undefined;
     if (!goal) {
       const idsIndex = getIdsIndex(d);
       goal = {
         id: ids[idsIndex],
         t: "songs",
         d,
-        song_count,
       };
+      if (song_count) {
+        goal.song_count = song_count;
+      }
       if (higher_diff) {
         goal.higher_diff = higher_diff;
       }
+      if (score) {
+        goal.score = score;
+      }
+      if (average_score) {
+        goal.average_score = average_score;
+      }
       if (clearType) {
         goal.clear_type = clearType;
+      }
+      if (exceptions) {
+        goal.exceptions = exceptions;
+      }
+      if (exception_score) {
+        goal.exception_score = exception_score;
       }
       ids[idsIndex] += 1;
       goals.push(goal);
@@ -226,62 +283,6 @@ async function listRequirements(rows: string[][]) {
     setGoalId(rowIndex, columnIndex, goal);
   };
 
-  const parseAll: Parser = (rowIndex, columnIndex, match) => {
-    const d = Number(match[1]);
-    const score = match[2].includes(",")
-      ? Number(match[4].replace(",", ""))
-      : Number(match[3]) * 1000;
-    let exceptions: number | undefined = undefined;
-    let exception_score: number | undefined = undefined;
-    if (match[5]) {
-      exceptions = Number(match[6]);
-      if (match[7]) {
-        exception_score = Number(match[8]) * 1000;
-      }
-    }
-    let song_exceptions: string[] | undefined = undefined;
-    if (match[9]) {
-      song_exceptions = match[10].split(" & ").map(getSong);
-      if (match[11]) {
-        exception_score = Number(match[12]) * 1000;
-      }
-    }
-    let goal = goals.find(
-      (goal) =>
-        "d" in goal &&
-        "score" in goal &&
-        !("song_count" in goal) &&
-        !("songs" in goal) &&
-        goal.d === d &&
-        goal.t === "songs" &&
-        goal.score === score &&
-        goal.exceptions === exceptions &&
-        goal.exception_score === exception_score &&
-        shallowequal(goal.song_exceptions, song_exceptions)
-    );
-    if (!goal) {
-      const idsIndex = getIdsIndex(d);
-      goal = {
-        id: ids[idsIndex],
-        d,
-        t: "songs",
-        score,
-      };
-      if (exceptions) {
-        goal.exceptions = exceptions;
-      }
-      if (exception_score) {
-        goal.exception_score = exception_score;
-      }
-      if (song_exceptions) {
-        goal.song_exceptions = song_exceptions;
-      }
-      ids[idsIndex] += 1;
-      goals.push(goal);
-    }
-    setGoalId(rowIndex, columnIndex, goal);
-  };
-
   const parseCalories: Parser = (rowIndex, columnIndex, match) => {
     const count = Number(match[1]);
     let goal = goals.find(
@@ -332,40 +333,6 @@ async function listRequirements(rows: string[][]) {
     setGoalId(rowIndex, columnIndex, goal);
   };
 
-  const parseScores: Parser = (rowIndex, columnIndex, match) => {
-    const score = Number(match[3]) * 1000;
-    const song_count = Number(match[1]);
-    const d = Number(match[2]);
-    const exceptions = match[4] ? Number(match[5]) : undefined;
-    const exception_score = match[6] ? Number(match[7]) * 1000 : undefined;
-    let goal = goals.find(
-      (goal) =>
-        "d" in goal &&
-        "score" in goal &&
-        "song_count" in goal &&
-        goal.d === d &&
-        goal.score === score &&
-        goal.song_count === song_count &&
-        goal.exceptions === exceptions &&
-        goal.exception_score === exception_score
-    );
-    if (!goal) {
-      const idsIndex = getIdsIndex(d);
-      goal = {
-        id: ids[idsIndex],
-        t: "songs",
-        d,
-        score,
-        song_count,
-        exceptions,
-        exception_score,
-      };
-      ids[idsIndex] += 1;
-      goals.push(goal);
-    }
-    setGoalId(rowIndex, columnIndex, goal);
-  };
-
   const parseSet: Parser = (rowIndex, columnIndex, match) => {
     const count = Number(match[1]);
     const difficulty = Number(match[2]);
@@ -402,29 +369,6 @@ async function listRequirements(rows: string[][]) {
     return d;
   };
 
-  const parseAverage: Parser = (rowIndex, columnIndex, match) => {
-    const average_score = Number(match[1].replace(",", ""));
-    const d = getDifficulty(rowIndex, columnIndex);
-    let goal = goals.find(
-      (goal) =>
-        "average_score" in goal &&
-        goal.d === d &&
-        goal.average_score === average_score
-    );
-    if (!goal) {
-      const idsIndex = getIdsIndex(d);
-      goal = {
-        average_score,
-        id: ids[idsIndex],
-        d,
-        t: "songs",
-      };
-      ids[idsIndex] += 1;
-      goals.push(goal);
-    }
-    setGoalId(rowIndex, columnIndex, goal);
-  };
-
   const parseSongScore: Parser = (rowIndex, columnIndex, match) => {
     const score = Number(match[1]) * 1000;
     const d = getDifficulty(rowIndex, columnIndex);
@@ -456,8 +400,8 @@ async function listRequirements(rows: string[][]) {
 
   const parseMAPoints = (rowIndex: number, columnIndex: number) => {
     const cell = rows[rowIndex + 1][columnIndex];
-    if (cell == null) return;
     const points = Number(cell);
+    if (points === 0 || Number.isNaN(points)) return;
     let goal = goals.find((goal) => "points" in goal && goal.points === points);
     if (!goal) {
       goal = {
@@ -512,10 +456,12 @@ async function listRequirements(rows: string[][]) {
       let match;
       if (
         (match = trimmedCell.match(
-          /^(Clear|LIFE4 Clear|Full Combo|Great Full Combo|PFC|SDP|MFC) ([a0-9]+)n? ([0-9]{1,2})s?(\+)?$/
+          new RegExp(
+            `^${clearTypeRegex} (all|an?|\\d+) ([0-9]{1,2})s?(\\+)?(?: over | with a )?${scoreRegex}?(?: (Folder Average))?( \\(${exceptionRegex}(, ${scoreRegex})?\\))?$`
+          )
         ))
       ) {
-        return parseClear(i, j, match);
+        return parseScores(i, j, match);
       }
       if ((match = trimmedCell.match(/^([0-9]+) ([0-9]{1,2})(\+)? PFCs/))) {
         return parsePFCs(i, j, match);
@@ -528,13 +474,6 @@ async function listRequirements(rows: string[][]) {
       if ((match = trimmedCell.match(/(.+) Lamp$/))) {
         return parseLamp(i, j, match);
       }
-      if (
-        (match = trimmedCell.match(
-          /^All ([0-9]{1,2})s over (([0-9]{3})k|([0-9]{3},[0-9]{3}))( \(([0-9]+)E(, ([0-9]+)k\)))?( \(ex. ([^,]+)(, ([0-9]+)k)?\))?/
-        ))
-      ) {
-        return parseAll(i, j, match);
-      }
       if ((match = trimmedCell.match(/^Burn ([0-9]+)/))) {
         return parseCalories(i, j, match);
       }
@@ -546,22 +485,13 @@ async function listRequirements(rows: string[][]) {
         return parseScore(i, j, match);
       }
       if (
-        (match = trimmedCell.match(
-          // temp: optional "60" in the sheet from copy-paste error
-          /^Clear(?: 60)? ([0-9]+) ([0-9]+)s over ([0-9]{3})k( \(([0-9]+)E(, ([0-9]+)k\)))?/
-        ))
-      ) {
-        return parseScores(i, j, match);
-      }
-      if (
         (match = trimmedCell.match(/^Clear ([0-9]+) ([0-9]{1,2})s in a row/))
       ) {
         return parseSet(i, j, match);
       }
-      if ((match = trimmedCell.match(/^([0-9,]+) Average/))) {
-        return parseAverage(i, j, match);
-      }
-      if ((match = trimmedCell.match(/^([0-9]{3})k\+ on (.*)$/))) {
+      if (
+        (match = trimmedCell.match(new RegExp(`^${scoreRegex}\\+ on (.*)$`)))
+      ) {
         return parseSongScore(i, j, match);
       }
     });
@@ -573,17 +503,17 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const a3Rows = await getRows("'5.1 patch (A3 ver.)'!A1:BM");
-  const a20Rows = await getRows("'5.1 patch (A20+ ver.)'!A1:BM");
-  if (a3Rows && a20Rows) {
+  const worldRows = await getRows("'5.2 (WORLD)'!A1:BM");
+  const a20Rows = await getRows("'5.2 (WORLD)'!A1:BM");
+  if (worldRows && a20Rows) {
     const json = {
       goals,
       game_versions: {
         A20: {
           rank_requirements: await listRequirements(a20Rows),
         },
-        A3: {
-          rank_requirements: await listRequirements(a3Rows),
+        WORLD: {
+          rank_requirements: await listRequirements(worldRows),
         },
       },
     };
