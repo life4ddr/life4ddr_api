@@ -43,7 +43,9 @@ const printGoal = (goal?: Goal) => {
     goal.t === "set" &&
     goal.diff_nums.every((diff) => diff === goal.diff_nums[0])
   ) {
-    return `Clear ${goal.diff_nums.length} ${goal.diff_nums[0]}s in a row`;
+    return `Clear ${goal.diff_nums.length} ${goal.diff_nums[0]}${
+      goal.higher_diff ? "+" : ""
+    }s in a row`;
   }
   if (goal.t === "songs") {
     if ("d" in goal) {

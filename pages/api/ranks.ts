@@ -56,7 +56,7 @@ const ids: { [index: string]: number } = {
 
 async function getRows(range: string) {
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "15lVqlvGrOAQLb-WwqfzOmGc7yAp1TRgL_yjn1xe6kfw",
+    spreadsheetId: "1jSkSVrAUo1Fpk2b9lhM9b1ttEJPajS-RATPyWiy3v9Q",
     range: range,
   });
   const rows = res.data.values;
@@ -336,6 +336,7 @@ async function listRequirements(rows: string[][]) {
   const parseSet: Parser = (rowIndex, columnIndex, match) => {
     const count = Number(match[1]);
     const difficulty = Number(match[2]);
+    const higher_diff = !!match[3] || undefined;
     const diff_nums = Array(count);
     diff_nums.fill(difficulty);
     let goal = goals.find(
@@ -347,6 +348,9 @@ async function listRequirements(rows: string[][]) {
         t: "set",
         diff_nums,
       };
+      if (higher_diff) {
+        goal.higher_diff = true;
+      }
       ids.songsDiffNums += 1;
       goals.push(goal);
     }
@@ -485,7 +489,9 @@ async function listRequirements(rows: string[][]) {
         return parseScore(i, j, match);
       }
       if (
-        (match = trimmedCell.match(/^Clear ([0-9]+) ([0-9]{1,2})s in a row/))
+        (match = trimmedCell.match(
+          /^Clear ([0-9]+) ([0-9]{1,2})(\+?)s in a row/
+        ))
       ) {
         return parseSet(i, j, match);
       }
@@ -499,12 +505,9 @@ async function listRequirements(rows: string[][]) {
   return requirements;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const worldRows = await getRows("'5.2 (WORLD)'!A1:BM");
-  const a20Rows = await getRows("'5.2 (WORLD)'!A1:BM");
+export default async function handler(_: NextApiRequest, res: NextApiResponse) {
+  const worldRows = await getRows("'6.0 (WORLD ver.)'!A1:BY");
+  const a20Rows = await getRows("'6.0 (A20+ ver.)'!A1:BY");
   if (worldRows && a20Rows) {
     const json = {
       goals,

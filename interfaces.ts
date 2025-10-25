@@ -57,6 +57,7 @@ type SongsDiffClassGoal =
 interface SongsDiffNumsGoal extends GoalBase {
   t: "set";
   diff_nums: number[];
+  higher_diff?: true;
 }
 
 export interface SongsGoal extends GoalBase {
