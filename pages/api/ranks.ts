@@ -209,10 +209,11 @@ async function listRequirements(rows: string[][]) {
     setGoalId(rowIndex, columnIndex, goal);
   };
 
-  const parsePFCs: Parser = (rowIndex, columnIndex, match) => {
+  const parseClears: Parser = (rowIndex, columnIndex, match) => {
     const song_count = Number(match[1]);
     const d = Number(match[2]);
     const higher_diff = !!match[3] || undefined;
+    const clearType = clearTypes[match[4]];
     let goal = goals.find(
       (goal) =>
         "d" in goal &&
@@ -222,7 +223,7 @@ async function listRequirements(rows: string[][]) {
         goal.d === d &&
         goal.song_count === song_count &&
         goal.higher_diff === higher_diff &&
-        goal.clear_type === "perfect"
+        goal.clear_type === clearType
     );
     if (!goal) {
       const idsIndex = getIdsIndex(d);
@@ -231,7 +232,7 @@ async function listRequirements(rows: string[][]) {
         t: "songs",
         d,
         song_count,
-        clear_type: "perfect",
+        clear_type: clearType,
       };
       if (higher_diff) {
         goal.higher_diff = higher_diff;
@@ -467,8 +468,12 @@ async function listRequirements(rows: string[][]) {
       ) {
         return parseScores(i, j, match);
       }
-      if ((match = trimmedCell.match(/^([0-9]+) ([0-9]{1,2})(\+)? PFCs/))) {
-        return parsePFCs(i, j, match);
+      if (
+        (match = trimmedCell.match(
+          new RegExp(`^([0-9]+) ([0-9]{1,2})(\\+)? ${clearTypeRegex}s`)
+        ))
+      ) {
+        return parseClears(i, j, match);
       }
       if (
         (match = trimmedCell.match(/^Earn (.*)+ or above on ([0-9]+) Trial/))
