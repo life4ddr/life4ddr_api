@@ -161,10 +161,10 @@ async function listRequirements(rows: string[][]) {
       }
     }
     let goal = goals.find(
-      (goal) =>
+      (goal): goal is SongsGoal =>
         "d" in goal &&
         "song_count" in goal &&
-        !("score" in goal) &&
+        !("songs" in goal) &&
         goal.t === "songs" &&
         goal.d === d &&
         goal.song_count === song_count &&
@@ -174,7 +174,7 @@ async function listRequirements(rows: string[][]) {
         goal.exceptions === exceptions &&
         goal.exception_score === exception_score &&
         (clearType ? goal.clear_type === clearType : !("clear_type" in goal))
-    ) as SongsGoal | undefined;
+    );
     if (!goal) {
       const idsIndex = getIdsIndex(d);
       goal = {
