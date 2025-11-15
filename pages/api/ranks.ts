@@ -163,7 +163,6 @@ async function listRequirements(rows: string[][]) {
     let goal = goals.find(
       (goal): goal is SongsGoal =>
         "d" in goal &&
-        "song_count" in goal &&
         !("songs" in goal) &&
         goal.t === "songs" &&
         goal.d === d &&
