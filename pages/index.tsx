@@ -1,6 +1,7 @@
 import { GetServerSideProps } from "next";
 import { ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import { ClearType, Goal, Requirement } from "../interfaces";
+import shallowequal from "shallowequal";
 
 const formatScore = (score: number) => {
   if (score % 1000 === 0) {
@@ -230,7 +231,40 @@ export default function Home({ host }: HomeProps) {
 
     const response = await fetch("/api/ranks");
 
-    setRanks(await response.json());
+    const ranks = await response.json();
+
+    let matchingGoalsFound = false;
+
+    ranks.goals.forEach((goal: Goal) => {
+      ranks.goals.forEach((comparisonGoal: Goal) => {
+        if (goal.id === comparisonGoal.id) return;
+
+        const { id: _, ...restOfGoal } = goal;
+        const { id: __, ...restOfComparisonGoal } = comparisonGoal;
+
+        const goalEntries = Object.entries(restOfGoal);
+        const comparisonGoalEntries = Object.entries(restOfComparisonGoal);
+
+        if (goalEntries.length !== comparisonGoalEntries.length) return;
+
+        if (
+          goalEntries.every(([key, value]) => {
+            return shallowequal(value, (restOfComparisonGoal as any)[key]);
+          })
+        ) {
+          matchingGoalsFound = true;
+          console.log("matching goals:");
+          console.dir(goal);
+          console.dir(comparisonGoal);
+        }
+      });
+    });
+
+    if (matchingGoalsFound) {
+      alert("Found matching goals! See browser console output.");
+    }
+
+    setRanks(ranks);
   }, []);
 
   useEffect(() => {
