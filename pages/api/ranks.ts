@@ -3,6 +3,12 @@ import { google } from "googleapis";
 import shallowequal from "shallowequal";
 import { ClearType, Goal, Requirement, SongsGoal } from "../../interfaces";
 
+// Next.JS API config
+// https://nextjs.org/docs/pages/building-your-application/routing/api-routes
+export const config = {
+  maxDuration: 60,
+}
+
 type Parser = (
   rowIndex: number,
   columnIndex: number,
