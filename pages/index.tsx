@@ -116,7 +116,7 @@ const Requirements = ({
   requirements: Requirement[];
   goals: Goal[];
 }) => {
-  const rows: ReactElement[][] = [];
+  const rows: ReactElement<any>[][] = [];
 
   let moreData = true;
   let index = 0;
