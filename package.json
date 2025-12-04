@@ -14,7 +14,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.1",
     "googleapis": "^105.0.0",
-    "next": "16.0.6",
+    "next": "16.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "shallowequal": "^1.1.0",
