@@ -62,7 +62,7 @@ const ids: { [index: string]: number } = {
 
 async function getRows(range: string) {
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: "1jSkSVrAUo1Fpk2b9lhM9b1ttEJPajS-RATPyWiy3v9Q",
+    spreadsheetId: "11i-sdqNSzZPh4mRGrJWm1tLgo05aD_HyhItWDzkryCE",
     range: range,
   });
   const rows = res.data.values;
@@ -202,7 +202,7 @@ async function listRequirements(rows: string[][]) {
       if (clearType) {
         goal.clear_type = clearType;
       }
-      if (exceptions) {
+      if (exceptions != null) {
         goal.exceptions = exceptions;
       }
       if (exception_score) {
@@ -516,8 +516,8 @@ async function listRequirements(rows: string[][]) {
 }
 
 export default async function handler(_: NextApiRequest, res: NextApiResponse) {
-  const worldRows = await getRows("'6.0 (WORLD ver.)'!A1:BY");
-  const a20Rows = await getRows("'6.0 (A20+ ver.)'!A1:BY");
+  const worldRows = await getRows("'6.1 (WORLD ver.)'!A1:BY");
+  const a20Rows = await getRows("'6.1 (A20+ ver.)'!A1:BY");
   if (worldRows && a20Rows) {
     const json = {
       goals,
