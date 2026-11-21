@@ -52,14 +52,17 @@ const printGoal = (goal?: Goal) => {
     if ("d" in goal) {
       if ("song_count" in goal) {
         const { score } = goal;
-        if (goal.exceptions && score) {
+        if (goal.exceptions != null && score) {
           let ret = `Clear ${goal.song_count} ${goal.d}s over ${formatScore(
             score
-          )} (${goal.exceptions}E`;
-          if (goal.exception_score) {
-            ret += `, ${formatScore(goal.exception_score)}`;
+          )}`;
+          if (goal.exceptions > 0) {
+            ret += ` (${goal.exceptions}E`;
+            if (goal.exception_score) {
+              ret += `, ${formatScore(goal.exception_score)}`;
+            }
+            ret += ")";
           }
-          ret += ")";
           return ret;
         }
         return `${
